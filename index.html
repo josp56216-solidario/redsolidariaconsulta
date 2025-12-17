@@ -25,10 +25,12 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes pulseSlow { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.8; } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         
         .animate-in { animation: fadeIn 0.5s ease-out forwards; }
         .slide-in-from-bottom-4 { animation: slideUp 0.5s ease-out forwards; }
         .animate-pulse-slow { animation: pulseSlow 4s infinite; }
+        .animate-shake { animation: shake 0.3s ease-in-out; }
         
         /* Utilidades extra */
         .glass-panel {
@@ -60,17 +62,33 @@
         const CreditCard = (props) => <IconBase {...props}><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></IconBase>;
         const Loader2 = ({ className, size, ...props }) => <IconBase className={`animate-spin ${className}`} size={size} {...props}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></IconBase>;
         const ArrowRight = (props) => <IconBase {...props}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></IconBase>;
+        const Lock = (props) => <IconBase {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>;
+        const LogOut = (props) => <IconBase {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></IconBase>;
+
+        // --- SISTEMA DE ACCESO (Ofuscado) ---
+        // Configuración interna de seguridad
+        const _sys_chk_01 = [97, 100, 109, 105, 110]; // u
+        const _sys_chk_02 = [76, 73, 66, 82, 69, 50, 48, 50, 53]; // p
+
+        const _validate_access = (input, target) => {
+            if (!input) return false;
+            if (input.length !== target.length) return false;
+            return input.split('').every((c, i) => c.charCodeAt(0) === target[i]);
+        };
 
         // --- CONFIGURACIÓN ---
-        // Enlace directo a tu Google Sheet (Publicado como CSV)
         const PRECONFIGURED_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRUnJ7lDvotkp4Oj2MAG6Ka8D1QPmN5CDVU0UigA7utTCIC-PfgbHqgDnR6IH1gnwNB6aP8iWTv17KI/pub?output=csv";
-
-        const FALLBACK_DATA = [
-          { no: "1", dep: "CORTES", mun: "San Pedro Sula", aldea: "COFRADIA", id: "0101195901659", nombre: "ROSSELL EDUARDO VALLE MATUTE" }
-        ];
+        const FALLBACK_DATA = [{ no: "1", dep: "CORTES", mun: "San Pedro Sula", aldea: "COFRADIA", id: "0101195901659", nombre: "ROSSELL EDUARDO VALLE MATUTE" }];
 
         // --- COMPONENTE PRINCIPAL ---
         function App() {
+          // Estados de autenticación
+          const [isAuthenticated, setIsAuthenticated] = useState(false);
+          const [loginUser, setLoginUser] = useState('');
+          const [loginPass, setLoginPass] = useState('');
+          const [loginError, setLoginError] = useState(false);
+
+          // Estados de la app principal
           const [query, setQuery] = useState('');
           const [result, setResult] = useState(null);
           const [hasSearched, setHasSearched] = useState(false);
@@ -81,14 +99,36 @@
 
           const normalizeText = (text) => {
             if (text === null || text === undefined) return '';
-            return text
-              .toString()
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .trim();
+            return text.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
           };
 
+          // --- MANEJO DE LOGIN ---
+          const handleLogin = (e) => {
+              e.preventDefault();
+              setLoginError(false);
+              
+              // Verificación ofuscada
+              const isUserValid = _validate_access(loginUser, _sys_chk_01);
+              const isPassValid = _validate_access(loginPass, _sys_chk_02);
+
+              if (isUserValid && isPassValid) {
+                  setIsAuthenticated(true);
+              } else {
+                  setLoginError(true);
+                  setLoginPass('');
+              }
+          };
+
+          const handleLogout = () => {
+              setIsAuthenticated(false);
+              setLoginUser('');
+              setLoginPass('');
+              setResult(null);
+              setHasSearched(false);
+              setQuery('');
+          };
+
+          // --- LÓGICA DE BÚSQUEDA ---
           const handleSearch = (e) => {
             e.preventDefault();
             if (!query.trim()) return;
@@ -99,13 +139,11 @@
 
             setTimeout(() => {
               const cleanQuery = normalizeText(query.replace(/-/g, '').replace(/\s+/g, ' '));
-              
               const found = database.find(item => {
                 const rawName = item.nombre || '';
                 const rawId = item.id || '';
                 const cleanName = normalizeText(rawName);
                 const cleanId = normalizeText(rawId).replace(/[^a-z0-9]/g, '');
-                
                 return cleanId.includes(cleanQuery) || cleanName.includes(cleanQuery);
               });
 
@@ -114,6 +152,7 @@
             }, 600);
           };
 
+          // --- PARSEO CSV ---
           const parseCSVLine = (text) => {
             const result = [];
             let cell = '';
@@ -124,11 +163,8 @@
                 if (inQuotes && text[i + 1] === '"') { cell += '"'; i++; } 
                 else { inQuotes = !inQuotes; }
               } else if (char === ',' && !inQuotes) {
-                result.push(cell.trim());
-                cell = '';
-              } else {
-                cell += char;
-              }
+                result.push(cell.trim()); cell = '';
+              } else { cell += char; }
             }
             result.push(cell.trim());
             return result;
@@ -137,47 +173,28 @@
           const parseCSV = (text) => {
             const lines = text.split(/\r?\n/);
             if (lines.length < 2) return [];
-
             let headerRowIndex = -1;
             let headers = [];
-
             for (let i = 0; i < Math.min(lines.length, 30); i++) {
                 const row = parseCSVLine(lines[i]).map(h => h.toLowerCase().replace(/[".]/g, '').trim());
-                const hasId = row.some(h => h.includes('identidad'));
-                const hasName = row.some(h => h.includes('nombre'));
-                if (hasId && hasName) {
-                    headerRowIndex = i;
-                    headers = row;
-                    break;
+                if (row.some(h => h.includes('identidad')) && row.some(h => h.includes('nombre'))) {
+                    headerRowIndex = i; headers = row; break;
                 }
             }
-
-            if (headerRowIndex === -1) {
-              console.warn("Usando cabeceras por defecto o fallback...");
-              headerRowIndex = 0; 
-              headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-            }
-            
+            if (headerRowIndex === -1) { headerRowIndex = 0; headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim()); }
             const getIndex = (keyword) => headers.findIndex(h => h.includes(keyword));
-            const idxId = getIndex('identidad');
-            const idxNombre = getIndex('nombre');
-            const idxDep = getIndex('departamento');
-            const idxMun = getIndex('municipio');
-            const idxAldea = getIndex('aldea');
-            const idxNo = getIndex('no');
-
+            const idxId = getIndex('identidad'); const idxNombre = getIndex('nombre');
+            const idxDep = getIndex('departamento'); const idxMun = getIndex('municipio');
+            const idxAldea = getIndex('aldea'); const idxNo = getIndex('no');
             const parsedData = [];
             for(let i = headerRowIndex + 1; i < lines.length; i++) {
               if(!lines[i].trim()) continue;
               const row = parseCSVLine(lines[i]);
               if (row.length > Math.min(idxId, idxNombre)) {
                 parsedData.push({
-                  id: idxId !== -1 ? row[idxId] : '',
-                  nombre: idxNombre !== -1 ? row[idxNombre] : '',
-                  dep: idxDep !== -1 ? row[idxDep] : '',
-                  mun: idxMun !== -1 ? row[idxMun] : '',
-                  aldea: idxAldea !== -1 ? row[idxAldea] : '',
-                  no: idxNo !== -1 ? row[idxNo] : `${i}`
+                  id: idxId !== -1 ? row[idxId] : '', nombre: idxNombre !== -1 ? row[idxNombre] : '',
+                  dep: idxDep !== -1 ? row[idxDep] : '', mun: idxMun !== -1 ? row[idxMun] : '',
+                  aldea: idxAldea !== -1 ? row[idxAldea] : '', no: idxNo !== -1 ? row[idxNo] : `${i}`
                 });
               }
             }
@@ -185,24 +202,16 @@
           };
 
           const loadGoogleSheet = async () => {
-            // Se usa directamente la URL configurada
-            const urlToUse = PRECONFIGURED_SHEET_URL;
-            
             setLoading(true);
-            
             try {
-              const response = await fetch(urlToUse);
+              const response = await fetch(PRECONFIGURED_SHEET_URL);
               if (!response.ok) throw new Error("Error de conexión");
               const text = await response.text();
               const newData = parseCSV(text);
-              
               if (newData.length > 0) {
                 setDatabase(newData);
                 setDataStats({ loaded: newData.length, source: 'Base de Datos Oficial' });
-                // Mensaje de éxito removido para no molestar al usuario final
-              } else {
-                throw new Error("Datos vacíos");
-              }
+              } else { throw new Error("Datos vacíos"); }
             } catch (err) {
               console.error(err);
               if (database.length === 0) setDatabase(FALLBACK_DATA); 
@@ -212,10 +221,72 @@
             }
           };
 
-          useEffect(() => {
-            loadGoogleSheet();
-          }, []);
+          useEffect(() => { loadGoogleSheet(); }, []);
 
+          // --- VISTA DE LOGIN ---
+          if (!isAuthenticated) {
+              return (
+                <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex items-center justify-center p-4">
+                    {/* Background Decorativo */}
+                    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+                        <div className="absolute -top-[20%] -right-[10%] w-[700px] h-[700px] bg-blue-100 rounded-full blur-3xl opacity-50 mix-blend-multiply animate-pulse-slow"></div>
+                        <div className="absolute -bottom-[20%] -left-[10%] w-[600px] h-[600px] bg-indigo-100 rounded-full blur-3xl opacity-50 mix-blend-multiply"></div>
+                    </div>
+
+                    <div className="relative z-10 w-full max-w-md bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-2xl border border-white/40 animate-in">
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-600/30">
+                                <Lock className="text-white" size={32} />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900">Acceso Restringido</h2>
+                            <p className="text-slate-500 text-sm mt-2">Sistema de Consulta Red Solidaria 2025</p>
+                        </div>
+
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Usuario</label>
+                                <input 
+                                    type="text" 
+                                    value={loginUser}
+                                    onChange={(e) => setLoginUser(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                                    placeholder="Ingrese su usuario"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Contraseña</label>
+                                <input 
+                                    type="password" 
+                                    value={loginPass}
+                                    onChange={(e) => setLoginPass(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                                    placeholder="••••••••"
+                                />
+                            </div>
+
+                            {loginError && (
+                                <div className={`flex items-center gap-2 text-red-500 text-sm bg-red-50 p-3 rounded-lg border border-red-100 ${loginError ? 'animate-shake' : ''}`}>
+                                    <AlertCircle size={16} />
+                                    <span>Credenciales incorrectas</span>
+                                </div>
+                            )}
+
+                            <button 
+                                type="submit" 
+                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 mt-2"
+                            >
+                                Ingresar al Sistema
+                            </button>
+                        </form>
+                        <p className="text-center text-xs text-slate-400 mt-6">
+                            Solo personal autorizado
+                        </p>
+                    </div>
+                </div>
+              );
+          }
+
+          // --- VISTA PRINCIPAL (Si está autenticado) ---
           return (
             <div className="min-h-screen bg-slate-50 font-sans text-slate-800 selection:bg-blue-200">
               
@@ -251,7 +322,14 @@
                       </div>
                     </div>
                     
-                    {/* Botón de configuración eliminado para la versión pública */}
+                    <button 
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 px-4 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all text-sm font-medium"
+                        title="Cerrar Sesión"
+                    >
+                        <span className="hidden sm:inline">Salir</span>
+                        <LogOut size={18} />
+                    </button>
                  </div>
               </header>
 
