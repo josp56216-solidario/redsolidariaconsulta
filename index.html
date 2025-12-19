@@ -100,7 +100,8 @@
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, getDocs, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // IMPORTANTE: Se agregaron orderBy y limit a la importación
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, getDocs, enableIndexedDbPersistence, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const { useState, useEffect, useMemo, useRef } = React;
         
@@ -300,7 +301,6 @@
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Detalle Completo del Caso" maxWidth="max-w-4xl">
                     <div className="space-y-6">
-                        {/* Header Info */}
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div><p className="detail-label">Paciente</p><p className="detail-value text-lg">{exp.patientName}</p></div>
                             <div><p className="detail-label">Servicio</p><p className="detail-value">{exp.serviceName}</p></div>
@@ -308,7 +308,6 @@
                             <div><p className="detail-label">Estado</p><span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${ESTADOS[exp.estado]?.color}`}>{ESTADOS[exp.estado]?.label}</span></div>
                         </div>
 
-                        {/* Group 1 */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <h4 className="font-bold text-slate-800 border-b pb-1 mb-2">Datos Quirúrgicos</h4>
@@ -336,7 +335,6 @@
                             </div>
                         </div>
 
-                        {/* Group 2 & 3 Combined */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <h4 className="font-bold text-slate-800 border-b pb-1 mb-2">Pre-Operatorios</h4>
@@ -676,7 +674,9 @@
                             <div className="flex items-center gap-3"><button onClick={() => setSelectedPatient(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors btn-hover-effect"><Icons.ArrowLeft size={20} /></button><div><h3 className="font-bold text-lg text-slate-800 brand-font leading-none">Expediente Digital</h3><p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {selectedPatient.id.slice(0,8).toUpperCase()}</p></div></div>
                             <button onClick={()=>setShowExpForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all btn-hover-effect bg-turquoise-600 hover:bg-turquoise-700 text-white"><Icons.FolderPlus size={16}/> <span className="hidden sm:inline">Nuevo Caso</span></button>
                         </div>
+                        
                         <ExpedienteDetailModal exp={viewingExp} isOpen={!!viewingExp} onClose={() => setViewingExp(null)} />
+
                         <Modal isOpen={showExpForm} onClose={closeExpForm} title={editingExpId ? "Editar Caso Clínico" : "Registrar Nuevo Caso"} maxWidth="max-w-5xl">
                             <form onSubmit={handleSubmitExp} className="space-y-6">
                                 <div className="group-box"><h5 className="group-title">Grupo 1: Servicio y Asistencia Médica</h5><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Fecha Solicitud</label><input type="date" required className="w-full p-2 rounded-lg border text-sm" value={expData.fechaSolicitud} onChange={e=>handleExpChange('fechaSolicitud', e.target.value)} /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Prioridad</label><select className="w-full p-2 rounded-lg border text-sm" value={expData.prioridad} onChange={e=>handleExpChange('prioridad', e.target.value)}>{Object.entries(PRIORIDADES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Servicio</label><select required className="w-full p-2 rounded-lg border text-sm" value={expData.servicioId} onChange={e=>setExpData(p=>({...p, servicioId:e.target.value, specialtyId:'', doctorId:''}))}><option value="">Seleccione...</option>{services.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Especialidad</label><select required className="w-full p-2 rounded-lg border text-sm" value={expData.specialtyId} onChange={e=>setExpData(p=>({...p, specialtyId:e.target.value, doctorId:''}))} disabled={!expData.servicioId}><option value="">Seleccione...</option>{availableSpecialties.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Médico</label><select required className="w-full p-2 rounded-lg border text-sm" value={expData.doctorId} onChange={e=>handleExpChange('doctorId', e.target.value)} disabled={!expData.specialtyId}><option value="">Seleccione...</option>{availableDoctors.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Diagnósticos</label><DynamicList items={expData.diagnosticos} onChange={handleDiagChange} placeholder="Diagnóstico..." /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Intervenciones</label><DynamicList items={expData.procedimientos} onChange={handleProcChange} placeholder="Procedimiento..." /></div></div><div className="grid grid-cols-2 gap-4 mt-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Tipo Cirugía</label><select className="w-full p-2 rounded-lg border text-sm" value={expData.tipoCirugia} onChange={e=>handleExpChange('tipoCirugia', e.target.value)}><option value="1. CMA">1. CMA</option><option value="2. cma">2. cma</option><option value="3. Con Hospitalización">3. Con Hospitalización</option></select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Anestesia</label><select className="w-full p-2 rounded-lg border text-sm" value={expData.tipoAnestesia} onChange={e=>handleExpChange('tipoAnestesia', e.target.value)}><option value="General">General</option><option value="Local">Local</option><option value="Otra">Otra</option><option value="Nueva">Nueva</option></select></div></div><div className="flex flex-wrap gap-3 mt-4"><div className="flex items-center gap-2"><ToggleBtn label="RX Intra" active={expData.apoyoRadiologia} onClick={()=>handleExpChange('apoyoRadiologia', !expData.apoyoRadiologia)} /></div><div className="flex items-center gap-2"><ToggleBtn label="Biopsia Intra" active={expData.apoyoBiopsia} onClick={()=>handleExpChange('apoyoBiopsia', !expData.apoyoBiopsia)} /></div><div className="flex items-center gap-2 bg-red-50 p-2 rounded-lg border border-red-100"><ToggleBtn label="Pedido Sangre" active={expData.apoyoSangre} onClick={()=>handleExpChange('apoyoSangre', !expData.apoyoSangre)} />{expData.apoyoSangre && <><input type="text" placeholder="Unidades" className="w-20 p-1 text-xs border rounded" value={expData.sangreUnidades} onChange={e=>handleExpChange('sangreUnidades', e.target.value)} /><input type="text" placeholder="Grupo" className="w-16 p-1 text-xs border rounded" value={expData.sangreGrupo} onChange={e=>handleExpChange('sangreGrupo', e.target.value)} /><input type="text" placeholder="RH" className="w-12 p-1 text-xs border rounded" value={expData.sangreRH} onChange={e=>handleExpChange('sangreRH', e.target.value)} /></>}</div></div></div>
@@ -822,7 +822,7 @@
                     {/* Navigation Cards */}
                     <h3 className="text-xl font-bold text-slate-700 brand-font mt-8">Accesos Directos</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {navCards.filter(c => c.role === 'all' || (role === 'superadmin') || (role === 'admin' && c.role === 'admin')).map(card => (
+                        {navCards.filter(c => c.role === 'all' || (role === 'superadmin') || (role === 'admin' && (c.role === 'admin' || c.role === 'all'))).map(card => (
                             <button key={card.id} onClick={() => setView(card.id)} className="group relative bg-white p-6 rounded-3xl shadow-soft border border-slate-100 hover:shadow-xl transition-all duration-300 text-left hover:-translate-y-1 overflow-hidden">
                                 <div className={`absolute top-0 right-0 w-24 h-24 ${card.color} opacity-10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110`}></div>
                                 <div className={`w-12 h-12 rounded-2xl ${card.color} flex items-center justify-center text-white mb-4 shadow-md group-hover:scale-110 transition-transform`}>
@@ -963,13 +963,13 @@
                     }).join("\n");
                 } else {
                     const patientMap = patients.reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
-                    headers = ["ID Paciente (DNI)", "Nombre Paciente", "Fecha Nacimiento", "Edad", "Sexo", "Domicilio", "Telefono", "Servicio", "Diagnostico", "Intervencion", "Medico", "Estado"].join(sep) + "\n";
+                    headers = ["ID Paciente (DNI)", "Nombre Paciente", "Fecha Nacimiento", "Edad", "Sexo", "Domicilio", "Telefono", "Servicio", "Diagnostico", "Intervencion", "Medico", "Estado", "Dias Espera", "Fecha Solicitud"].join(sep) + "\n";
                     rows = data.map(e => {
                         const p = patientMap[e.patientId] || {}; 
                         const dni = p.dni || 'N/A';
                         const edad = p.edad || 'N/A';
                         const dias = calculateDaysWaiting(e.fechaSolicitud);
-                        return [dni, e.patientName, p.fechaNacimiento || '', p.edad || '', p.sexo || '', p.domicilio || '', p.telefonos || '', e.serviceName, e.diagnostico, e.procedimiento, e.doctorName, e.estado].map(esc).join(sep);
+                        return [dni, e.patientName, p.fechaNacimiento || '', p.edad || '', p.sexo || '', p.domicilio || '', p.telefonos || '', e.serviceName, e.diagnostico, e.procedimiento, e.doctorName, e.estado, dias, e.fechaSolicitud].map(esc).join(sep);
                     }).join("\n");
                 }
 
